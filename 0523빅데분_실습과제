@@ -1,0 +1,196 @@
+이번에는 본격적으로 빅데이터 분석 실습을 할 차례이다.
+파이썬 파일을 업로드했으니 이곳에선 대략적인 설명과 주제분석에 대해서 다뤄보겠다.
+
+주어진 파일은 고객명단(customer), 가게명단(store), 거래명단(sales)가 있다.
+
+내가 주목할 부분은 세대 별 고객들의 특징들을 분석해보려한다.
+
+우선 패키지의 필요한 import문들을 쓰고 csv파일들을 가져옴으로써 분석을 위한 세팅들을 했다.
+
+# 필요한 패키지들 import작업
+import pandas as pd
+from statsmodels.formula.api import ols, glm
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+import numpy as np
+
+# csv데이터 파일 가져오기
+customer = pd.read_csv("customer.csv")
+sales = pd.read_csv("sales.csv")
+store = pd.read_csv("store.csv")
+
+그 후에 세대 별로 나누기 이전에 고객들의 연령대를 확인해야하므로 고객들의 연령을 기준으로 정렬을 했다.
+
+# 고객들의 연령대 확인
+customer.sort_values('연령')
+
+result:
+	고객ID	성별	연령	거주지역
+3201	Q10253817	F	20	서울 광진구 중곡3동
+259	Q16064122	F	20	서울 양천구 신정4동
+1231	Q04808872	F	20	서울 성북구 동선동4가
+1495	Q53155612	F	20	서울 은평구 대조동
+73	Q32750017	F	20	경기 고양시 일산동구 마두1동
+...	...	...	...	...
+2105	Q30275575	F	79	서울 서초구 잠원동
+3636	Q66945670	F	79	서울 서초구 서초동
+3428	Q91325491	F	79	경기 고양시 덕양구 관산동
+4952	Q16180300	M	79	서울 서초구 서초1동
+552	Q12007891	F	79	서울 성북구 돈암2동
+
+결과는 20 ~ 79살까지 20대부터 70대까지있다.
+10살 단위로 나누어서 분석을 한다면 더욱 세분화된 세대 별 특징들을 분석할 수 있겠지만,
+이번에는 20살 단위로 하여 2~30대, 4~50대, 6~70대로 세 가지 집단으로 나눠봤다.
+
+그래서 데이터들을 분석하기 앞서 분석하기 편하게 가공 작업을 거쳐준다. 
+우선, 고객들을 세대 별로 나눠야하기 때문에 고객명단에서 연령 별로 나눠줬다.
+나는 나이 구간별로 나누기 위해서 isin함수를 사용했다.
+
+# 세대 별 단위로 고객들 분류
+customer_2030 = customer[customer['연령'].isin([20,39])]
+customer_4050 = customer[customer['연령'].isin([40,59])]
+customer_6070 = customer[customer['연령'].isin([60,79])]
+
+이렇게 함으로써, 세대 별로 데이터를 분할했다.
+이후 거래명단에서 해당 세대 별로 나누는 작업을 하기 위해서 구별할 수 있는 값인 고객ID값을 따로 변수선언을 했다.
+
+# 세대 별 고객들 명단
+
+list_2030 = customer_2030['고객ID']
+list_4050 = customer_4050['고객ID']
+list_6070 = customer_6070['고객ID']
+
+이렇게 함으로써 세대 별 고객ID명단을 따로 뽑아왔고 이것을 바로 거래명단에서 사용함으로써, 세대 별 거래명단으로 분할이 가능하다.
+
+# 세대 별 거래식별 ID명단
+sales_2030 = sales[sales['고객ID'].isin(list_2030)]
+sales_4050 = sales[sales['고객ID'].isin(list_4050)]
+sales_6070 = sales[sales['고객ID'].isin(list_6070)]
+
+이후 추가적인 분석을 위해서 거래식별ID도 따로 분류했다.
+
+pay_2030 = sales_2030['거래식별ID']
+pay_4050 = sales_4050['거래식별ID']
+pay_6070 = sales_6070['거래식별ID']
+
+이렇게 데이터들을 정리해보았고 이젠, 통계를 살펴볼 차례다.
+
+세대 별로 한 번 거래할 때마다 구매금액을 얼마나 쓰는지 통계를 내보았다.
+
+# 세대 별 구매금액 통계
+
+# 2030
+sales_2030.구매금액.describe()
+
+count     1431.000000
+mean      4281.013976
+std       4239.197914
+min         40.000000
+25%       1590.000000
+50%       2995.000000
+75%       5575.000000
+max      50000.000000
+Name: 구매금액, dtype: float64
+
+#4050
+sales_4050.구매금액.describe()
+
+count     2342.000000
+mean      5009.492741
+std       5625.583332
+min         40.000000
+25%       1920.000000
+50%       3448.500000
+75%       5990.000000
+max      69900.000000
+Name: 구매금액, dtype: float64
+
+#6070
+sales_6070.구매금액.describe()
+
+count     1046.000000
+mean      5585.304971
+std       6554.686187
+min        120.000000
+25%       2000.000000
+50%       3980.000000
+75%       6900.000000
+max      77000.000000
+Name: 구매금액, dtype: float64
+
+다음과 같이 값들이 나왔다.
+나는 수익을 극대화하는 것이 기업의 궁극적 목적이므로,
+잘팔리는 제품들의 특징을 살펴보고자 구입금의 상위75%를 넘기는 거래들을 살펴보고 그러한 거래가 이루어지도록
+영향을 미치는 거래품목들을 살펴보기로 했다.
+
+# 인덱스 초기화 작업
+
+salesPay_2030_test = salesPay_2030.reset_index(drop=True)
+salesPay_4050_test = salesPay_4050.reset_index(drop=True)
+salesPay_6070_test = salesPay_6070.reset_index(drop=True)
+
+pay_2030_test = pay_2030.reset_index(drop=True)
+pay_4050_test = pay_4050.reset_index(drop=True)
+pay_6070_test = pay_6070.reset_index(drop=True)
+
+
+나는 구입금액이 상위 75%를 넘기는 구매와 그렇지 않은 구매로 나누기 위해서 새로운 칼럼을 넣고 로지스틱회귀를 통해서
+품목들을 살펴볼 계획이다.
+
+각 세대 별 75%의 금액은 5575, 5990, 6900원이다.
+이 금액들을 넘기는 것들은 1, 그렇지 않으면 0이라는 값을 할당하고 새롭게 데이터들을 추가했다.
+
+# 2030에선 5575원이 상위 75%의 거래에게 관심이 있다.
+lis2030 = []
+for i in range(len(pay_2030_test)):
+    if salesPay_2030_test[i] >= 5575:
+        lis2030.append(1)
+    else:
+        lis2030.append(0)
+
+# 4050에선 5990원인 상위 75%의 거래에게 관심이 있다.
+lis4050 = []
+for i in range(len(pay_4050_test)):
+    if salesPay_4050_test[i] >= 5900:
+        lis4050.append(1)
+    else:
+        lis4050.append(0)
+
+# 6070에선 6900원인 상위 75%의 거래에게 관심이 있다.
+lis6070 = []
+for i in range(len(pay_6070_test)):
+    if salesPay_6070_test[i] >= 6900:
+        lis6070.append(1)
+    else:
+        lis6070.append(0)
+
+#인덱스 초기화작업
+sales_2030_test = sales_2030.reset_index(drop=True)
+sales_4050_test = sales_4050.reset_index(drop=True)
+sales_6070_test = sales_6070.reset_index(drop=True)
+
+# 칼럼 추가
+
+sales_2030_test['over_75per'] = lis2030
+sales_4050_test['over_75per'] = lis4050
+sales_6070_test['over_75per'] = lis6070
+
+이후 로지스틱 회귀를 통해서 데이터들을 분석했고 요약본을 얻을 수 있었다.
+
+logics2030 = sm.Logit.from_formula('over_75per~상품대분류명', data = sales_2030_test).fit()
+logics4050 = sm.Logit.from_formula('over_75per~상품대분류명', data = sales_4050_test).fit()
+logics6070 = sm.Logit.from_formula('over_75per~상품대분류명', data = sales_6070_test).fit()
+
+logics2030.summary()
+logics4050.summary()
+logics6070.summary()
+
+print(np.exp(logics2030.params))
+print(np.exp(logics4050.params))
+print(np.exp(logics6070.params))
+
+p-value가 0.05보다 작게 나왔으나, 상품의 종류들이 꽤나 많아서
+특정 품목들은 신뢰할 수 없는 형태가 나온다.
+그러나 전체적으로 음수들을 띄고 있기 때문에, 의외로 품목을 가리지 않고 많이 구입할수록 75%에서 멀어진다는 결과를 얻었다.
+
+다음에는 세대 내에서 구매 건수나, 성별, 계절 별로 분석을 해봐야겠다.
