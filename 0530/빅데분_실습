@@ -1,0 +1,198 @@
+지난 시간에는 결측치와 결정계수의 차이를 구분하지 못해서 엉뚱하게 데이터 분석을 해버렸다.
+따라서 이번 주차부터 다시 새롭게 데이터 전처리과정부터 시각화 및 통계까지 진행하도록 하겠다.
+
+우선 결측치를 확인하기 위해서 null값을 확인하기 위해 3가지 파일에 isnull함수를 사용했다.
+
+# null값 확인
+print(customer.isnull().sum())
+print(sales.isnull().sum())
+print(store.isnull().sum())
+
+# 데이터크기 확인
+print(customer.shape)
+print(sales.shape)
+print(store.shape)
+
+# customer파일
+고객ID     0
+성별       0
+연령       0
+거주지역    15
+dtype: int64
+
+customer파일에서만 거주지역 칼럼에서 null값이 15개나 나왔고 나머지는 null값이 없는 것으로 나왔다.
+여기서 한 가지 주의사항은 null값은 ''인 공백이나 0같은 값이 아니라 값이 부여되지 않은 것을 뜻하니 주의하자
+
+다시 돌아와서 null값이 있는 칼럼은 거주지역이기 때문에 null값을 그대로 두어도 되지만 앞으로 있을 분석에서 어떻게 작용될 지 모르기 때문에 '없음'이라는 값을 넣어줬다.
+
+customer = customer.fillna('없음')
+print(customer.isnull().sum())
+
+고객ID    0
+성별      0
+연령      0
+거주지역    0
+dtype: int64
+
+그리하여 customer에 null값이 모두 지워졌다.
+
+다음에는 sales에서 연령 별 고객들과 구매금액에 관련해서 특징을 분석하고 주제를 잡기 위해서 보기 용이하게 sales와 customer 데이터를 합쳐주기로 했다.
+
+merger_csales = pd.merge(customer, sales, on='고객ID', how='inner')
+merger_csales['연령대'] = (merger_csales['연령']//10) * 10
+
+해당 작업을 통해서 고객ID가 같은 sales파일에 customer파일을 합치게 되었으며, 추가적으로 연령대도 분석하기 편하게 10살 단위로 묶어서 추가적인 칼럼을 만들었다.
+
+그리고 통계값들을 내면서 특이한 요소들을 찾을 계획인데 우선, 연령대를 살펴봤다.
+
+# 연령대 확인
+merger_csales['연령대'].describe()
+# 70대가 최고 연령대임을 확인
+
+count    57198.000000
+mean        42.006888
+std         12.301702
+min         20.000000
+25%         30.000000
+50%         40.000000
+75%         50.000000
+max         70.000000
+Name: 연령대, dtype: float64
+
+합쳐진 거래파일에서 연령대를 한정해서 통계를 내본 결과 거래건수는 57198건이 있으며
+가장 높은 연령대는 70대임이 나왔고 가장 젊은 연령대는 20대임을 알 수 있다.
+
+그 다음은 10살 단위로 고객들을 쪼개서 다시 거래데이터를 나눠서 저장했다.
+
+# 10살 단위로 고객들 분류
+csales_20 = merger_csales[merger_csales['연령대'].isin([20])]
+csales_30 = merger_csales[merger_csales['연령대'].isin([30])]
+csales_40 = merger_csales[merger_csales['연령대'].isin([40])]
+csales_50 = merger_csales[merger_csales['연령대'].isin([50])]
+csales_60 = merger_csales[merger_csales['연령대'].isin([60])]
+csales_70 = merger_csales[merger_csales['연령대'].isin([70])]
+
+그 다음에 거래식별ID를 묶어서 다시 표를 출력함으로써, 한 고객이 한 번에 거래했을 때 구매금액들을 통계내봤다.
+여기서 구매금액의 합계를 원하면 sum함수를, 구매하는 물품의 종류수는 count, 금액의 평균금액은 mean함수를 이용해서 볼 수 있다.
+
+# 예시로 mean함수 사용
+csales_20_price = csales_20.groupby('거래식별ID').구매금액.mean().reset_index()
+csales_30_price = csales_30.groupby('거래식별ID').구매금액.mean().reset_index()
+csales_40_price = csales_40.groupby('거래식별ID').구매금액.mean().reset_index()
+
+이제는 시각적인 데이터로 볼 차례다.
+나는 박스플롯을 사용해서 이상치인 데이터와 이상치 이내의 데이터들을 나눠서 볼 생각이다.
+
+# 20대 고객의 한 번 거래당 구매금액의 박스모양
+
+# 1. 기본 스타일 설정
+plt.style.use('default')
+plt.rcParams['font.size'] = 12
+
+a = csales_20_price.구매금액
+b = csales_30_price.구매금액
+c = csales_40_price.구매금액
+
+plt.figure(figsize=(8,8))
+fig, ax = plt.subplots()
+
+ax.boxplot([a])
+ax.set_xlabel('age')
+ax.set_ylabel('pay_price')
+
+plt.show()
+
+다음 함수를 통해 본 결과 이상치가 생각보다 많다는 것을 알 수 있다.
+다른 연령대의 통계지표도 낼 수 있지만 우선, 20대를 먼저 초점으로 보겠다.
+
+이상치가 워낙 많으며, 이상치로 인해서 박스 플롯의 형태가 잘 안잡히기 때문에 
+가시성을 높이기 위해 이상치를 제거하도록 하겠다.
+
+# 이상치 제거
+
+csales_20_noraml = csales_20_price_sort[csales_20_price_sort['구매금액'] <= 10000]
+csales_20_noraml
+
+이상치는 10000원이 넘지 않는 경우도 있지만, 지금은 가시성을 위해 대략적으로 덜어내는 것이므로 일단 10000원을 기준으로 잡았다.
+
+# 20대 고객의 한 번 거래당 구매금액의 박스모양(극단적 이상치 제거)
+
+# 1. 기본 스타일 설정
+plt.style.use('default')
+plt.rcParams['font.size'] = 12
+
+a = csales_20_noraml['구매금액']
+
+
+plt.figure(figsize=(8,8))
+fig, ax = plt.subplots()
+
+ax.boxplot([a])
+ax.set_xlabel('age')
+ax.set_ylabel('pay_price')
+
+plt.show()
+
+그렇게 이상치를 제거하고 본 박스 플롯은 다음과 같이 나오게 되었으며 20대의 경우 수염 또는 외부울타리 범주까지 보더라도 한 번의 구매금액에서 10000원을 넘지 않는다는 것을 알 수 있다.
+그 중에서도 박스의 범위 약 2000원에서 5000원 사이에 있음을 알 수 있는데, 구매 품목도 조사해본다면 어느정도 가설 또는 주제를 잡을 수 있을 것 같다.
+
+다시 돌아와서 20대 고객들의 데이터는 csales_20라는 변수로 저장했다.
+여기서 상품대분류명을 기준으로 각 품목들의 구매빈도수를 파악해보자.
+
+# 상품대분류명으로 묶어서 구매횟수를 파악하자
+csales_20.groupby('상품대분류명').상품대분류명.count()
+
+상품대분류명
+곡물       33
+낙농      457
+냉동      122
+냉장      179
+델리카     234
+면과자     677
+수산      140
+야채      813
+음주류     560
+일반식품    258
+일상용품    304
+조미료류    195
+청과      331
+축산      141
+Name: 상품대분류명, dtype: int64
+
+결과값은 다음과 같으며 가장 많이 팔리는 제품군 3개를 보면 야채, 면과자, 음주류가 뽑히며
+적은 제품군은 곡물, 냉동, 수산이 있다.
+
+만약 제품 별 가격들이 있다면 좋겠지만, 그런 것은 없으므로 제품별 구매금액들을 보는 게 맞을 것이다.
+
+vege_20 = csales_20[csales_20['상품대분류명'] == '야채']
+snack_20 = csales_20[csales_20['상품대분류명'] == '면과자']
+alcohol_20 = csales_20[csales_20['상품대분류명'] == '음주류']
+grain_20 = csales_20[csales_20['상품대분류명'] == '곡물']
+freeze_20 = csales_20[csales_20['상품대분류명'] == '냉동']
+fish_20 = csales_20[csales_20['상품대분류명'] == '수산']
+
+vege_20['구매금액'].describe()
+snack_20['구매금액']describe()
+alcohol_20['구매금액']describe()
+grain_20['구매금액']describe()
+freeze_20['구매금액']describe()
+fish_20['구매금액']describe()
+
+각 분류 별 제품들의 구매금액들의 통계를 내보았다.
+
+우선 평균값은 다음과 같았다.
+
+# describe함수 대신 mean함수를 쓰면 평균만 나온다.
+2443.1955719557195 야채
+2391.1875923190546 면과자
+2963.625 음주류
+
+18320.848484848484 곡물
+3830.622950819672 냉동
+6569.371428571429 수산
+
+가장 잘 팔리는 제품군 3개의 평균 구매금액은 20대의 구매금액 박스플롯 중 박스안에 들어가는 반면,
+잘 안팔리는 제품군에서는 2개가 박스 밖에서 집계된다.
+
+이제는 사고의 시간이다. 야채와 면과자, 음주류 간에 연관성이 있는 지와
+곡물, 냉동, 수산의 연관성 또는 왜 잘 안팔리는 지를 생각해봐야하는데
